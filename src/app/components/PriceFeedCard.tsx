@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, memo } from "react";
+import { useRAFInterval } from "@/app/hooks/useRAFInterval";
 import { RefreshCw } from "lucide-react";
 import { useProgressBar } from "./TopLoadingBar";
 import { useDebounce } from "../hooks/useDebounce";
@@ -174,14 +175,12 @@ const PriceFeedCard: React.FC<PriceFeedCardProps> = ({
   }, [wsError, enableWebSocket]);
 
   // Initial fetch + fallback polling (only when WebSocket is disabled or disconnected)
+  const pollingActive = !enableWebSocket || !isConnected;
   useEffect(() => {
-    if (!enableWebSocket || !isConnected) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      load();
-      const id = setInterval(() => load(), refreshInterval);
-      return () => clearInterval(id);
-    }
-  }, [load, refreshInterval, enableWebSocket, isConnected]);
+    if (pollingActive) load();
+  }, [pollingActive, load]);
+
+  useRAFInterval(load, refreshInterval, pollingActive);
 
   // ── Guardrail: Up/Down arrow is STRICTLY driven by the 24h_change field ──
   const isUp = data !== null && data.change_24h >= 0;

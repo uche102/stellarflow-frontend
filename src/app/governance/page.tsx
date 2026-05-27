@@ -14,6 +14,7 @@ import {
   Wallet 
 } from 'lucide-react';
 import { useTransformedCustomAddressField } from '@/app/hooks/useTransformedData';
+import { useRAFInterval } from '@/app/hooks/useRAFInterval';
 
 // --- Types ---
 interface Proposal {
@@ -43,6 +44,21 @@ export default function GovernancePage() {
     () => useTransformedCustomAddressField(MOCK_PROPOSALS, 'proposer'),
     []
   );
+
+  // Live ledger countdown — one shared RAF tick every ~5 s (Stellar avg ledger time)
+  const [ledgerCounts, setLedgerCounts] = useState<Record<string, number>>(
+    () => Object.fromEntries(MOCK_PROPOSALS.map(p => [p.id, p.endsInLedgers]))
+  );
+
+  useRAFInterval(() => {
+    setLedgerCounts(prev => {
+      const next = { ...prev };
+      for (const id in next) {
+        if (next[id] > 0) next[id] -= 1;
+      }
+      return next;
+    });
+  }, 5000);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-100 p-8">
@@ -103,7 +119,7 @@ export default function GovernancePage() {
                     </span>
                     {proposal.status === 'Active' && (
                       <span className="text-xs text-gray-500 flex items-center gap-1 font-mono">
-                        <Clock size={12} /> ~{proposal.endsInLedgers.toLocaleString()} ledgers remaining
+                        <Clock size={12} /> ~{(ledgerCounts[proposal.id] ?? 0).toLocaleString()} ledgers remaining
                       </span>
                     )}
                   </div>
