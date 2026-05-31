@@ -275,8 +275,8 @@ export default function RelayersPage() {
                   <td className="px-6 py-4">
                     <div className="w-24 bg-gray-700 h-1.5 rounded-full overflow-hidden">
                       <div
-                        className="bg-blue-500 h-full"
-                        style={{ width: `${relayer.successRate}%` }}
+                        className="bg-blue-500 h-full will-change-transform"
+                        style={{ width: '100%', transform: `scaleX(${relayer.successRate/100})`, transformOrigin: 'left' }}
                       />
                     </div>
                     <span className="text-[10px] text-gray-500 mt-1 block">

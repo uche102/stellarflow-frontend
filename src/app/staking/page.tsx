@@ -134,8 +134,8 @@ export default function StakingPage() {
                     <div className="flex items-center gap-2">
                       <div className="w-16 bg-gray-700 h-1.5 rounded-full overflow-hidden">
                         <div 
-                          className={`h-full ${getHealthBarColor(node.healthFactor)}`} 
-                          style={{ width: `${node.healthFactor}%` }} 
+                          className={`h-full will-change-transform ${getHealthBarColor(node.healthFactor)}`} 
+                          style={{ width: '100%', transform: `scaleX(${node.healthFactor/100})`, transformOrigin: 'left' }} 
                         />
                       </div>
                       <span className="text-xs font-semibold">{node.healthFactor}%</span>
