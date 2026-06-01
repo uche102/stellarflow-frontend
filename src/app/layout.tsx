@@ -5,8 +5,10 @@ import "./globals.css";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ProgressBarProvider } from "./components/TopLoadingBar";
 import { UserProvider } from "./components/providers/UserProvider";
+import { QueryProvider } from "./components/providers/QueryProvider";
 import Script from "next/script";
 import {SocketProvider} from "./components/providers/SocketProvider";
+import { SvgSprite } from "@/components/icons";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,16 +39,29 @@ export default function RootLayout({
       <head>
         {/* Prevent background flash before next-themes hydrates */}
         <style>{`html { background-color: #0d1117; }`}</style>
+        {/* Preconnect to critical origins */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preconnect"
+          href="https://polyfill-library.fastly.dev"
+        />
         {/* Preload the critical above-the-fold logo asset */}
         <link
           rel="preload"
           href="/sf.webp"
           as="image"
           type="image/webp"
+          fetchPriority="high"
         />
         <Script
           id="polyfill-loader"
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
+          fetchPriority="low"
           dangerouslySetInnerHTML={{
             __html: `
               if (!('IntersectionObserver' in window) || 
@@ -65,6 +80,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Single global SVG symbol sheet — all icon <use> refs resolve here */}
+        <SvgSprite />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -72,9 +89,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <UserProvider>
-            <ProgressBarProvider>
-              {children}
-            </ProgressBarProvider>
+            <QueryProvider>
+              <ProgressBarProvider>
+                {children}
+              </ProgressBarProvider>
+            </QueryProvider>
           </UserProvider>
         </ThemeProvider>
       </body>

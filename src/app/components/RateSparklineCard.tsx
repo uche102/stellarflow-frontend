@@ -3,6 +3,8 @@
 import React, { useMemo } from "react";
 import { Shimmer } from "@/components/skeletons";
 
+const CHART_HISTORY_LIMIT = 150;
+
 interface RateSparklineCardProps {
   currency: string;
   rate: number;
@@ -20,17 +22,21 @@ const MiniSparkline = React.memo(function MiniSparkline({
     const width = 120;
     const height = 32;
 
-    if (data.length < 2) {
+    // Cap to the last CHART_HISTORY_LIMIT vectors and null-prune trailing slots.
+    const windowed = data.slice(-CHART_HISTORY_LIMIT);
+    windowed.length = windowed.length;
+
+    if (windowed.length < 2) {
       return "";
     }
 
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+    const min = Math.min(...windowed);
+    const max = Math.max(...windowed);
     const range = max - min || 1;
 
-    return data
+    return windowed
       .map((value, index) => {
-        const x = (index / (data.length - 1)) * width;
+        const x = (index / (windowed.length - 1)) * width;
         const y = height - ((value - min) / range) * height;
         return `${x},${y}`;
       })
@@ -84,7 +90,10 @@ const RateSparklineCard: React.FC<RateSparklineCardProps> = ({
 
   if (loading) {
     return (
-      <div className="aspect-[16/10] rounded-3xl border border-[#1B2A3B] bg-[#08111E] p-5 shadow-lg shadow-black/20">
+      <div
+        style={{ contain: "paint layout" }}
+        className="aspect-[16/10] rounded-3xl border border-[#1B2A3B] bg-[#08111E] p-5 shadow-lg shadow-black/20"
+      >
         <div className="flex h-full flex-col justify-between">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-2">
@@ -104,7 +113,10 @@ const RateSparklineCard: React.FC<RateSparklineCardProps> = ({
   }
 
   return (
-    <div className="aspect-[16/10] rounded-3xl border border-[#1B2A3B] bg-[#08111E] p-5 shadow-lg shadow-black/20 transition duration-300 hover:border-[#39FF14]/40">
+    <div
+      style={{ contain: "paint layout" }}
+      className="aspect-[16/10] rounded-3xl border border-[#1B2A3B] bg-[#08111E] p-5 shadow-lg shadow-black/20 transition duration-300 hover:border-[#39FF14]/40"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-gray-500">

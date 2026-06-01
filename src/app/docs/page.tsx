@@ -73,9 +73,12 @@ export default function DocsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-[#161b22] border border-gray-800 rounded-xl p-6">
+          <div
+            className="content-visibility-auto bg-[#161b22] border border-gray-800 rounded-xl p-6"
+            style={{ '--content-visibility-fallback': '1px 320px' } as React.CSSProperties}
+          >
             <h2 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-4 flex items-center gap-2">
-              <BookOpen size={16} className="text-blue-400" />
+              <Icon id={ICON_IDS.bookOpen} size={16} className="text-blue-400" />
               Integration Invariants
             </h2>
             <ul className="space-y-3 text-sm text-gray-400">
@@ -95,14 +98,14 @@ export default function DocsPage() {
             <div className="mt-6 pt-4 border-t border-gray-800">
               <a href="https://developers.stellar.org" target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline inline-flex items-center gap-1">
                 <span>Stellar Developer Docs</span>
-                <ExternalLink size={12} />
+                <Icon id={ICON_IDS.externalLink} size={12} />
               </a>
             </div>
           </div>
 
           <div className="bg-[#161b22] border border-gray-800 rounded-xl p-6">
             <h2 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-2 flex items-center gap-2">
-              <Cpu size={16} className="text-purple-400" />
+              <Icon id={ICON_IDS.cpu} size={16} className="text-purple-400" />
               Soroban RPC Invoker Playground
             </h2>
             <p className="text-xs text-gray-500 mb-4">Trigger a diagnostic read invocation directly against the deployed Testnet proxy structure.</p>
@@ -111,13 +114,13 @@ export default function DocsPage() {
               disabled={invoking}
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 text-white font-medium text-sm py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
             >
-              <Play size={14} className={invoking ? "animate-ping" : ""} />
+              <Icon id={ICON_IDS.play} size={14} className={invoking ? "animate-ping" : ""} />
               {invoking ? "Invoking Soroban RPC..." : "Execute Test Invocate"}
             </button>
 
             {invokeResult && (
-              <div className="mt-4 bg-[#0d1117] border border-gray-800 rounded-lg p-3 text-xs font-mono text-purple-300 max-h-48 overflow-y-auto">
-                <pre>{invokeResult}</pre>
+              <div className="mt-4 bg-[#0d1117] border border-gray-800 rounded-lg p-3 text-xs font-mono text-purple-300 max-h-48 overflow-y-auto node-status-cell">
+                <pre className="numeric-value">{invokeResult}</pre>
               </div>
             )}
           </div>

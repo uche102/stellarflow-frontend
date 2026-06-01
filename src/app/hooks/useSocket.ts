@@ -55,6 +55,10 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
   );
   const manuallyDisconnectedRef = useRef(false);
   const pageVisibleRef = useRef(true);
+  
+  // Batching refs for high-frequency updates
+  const pendingUpdatesRef = useRef<(PriceData | Partial<PriceData>)[]>([]);
+  const flushIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs keep options fresh inside callbacks without triggering re-renders or
   // causing `connect` to be recreated on every tick.
@@ -69,6 +73,26 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
     maxReconnectAttemptsRef.current = maxReconnectAttempts;
     reconnectIntervalRef.current = reconnectInterval;
   }, [maxReconnectAttempts, reconnectInterval]);
+
+  // Flush pending updates to state
+  const flushPendingUpdates = useCallback(() => {
+    if (pendingUpdatesRef.current.length === 0) return;
+    
+    // Take all pending updates
+    const updates = [...pendingUpdatesRef.current];
+    pendingUpdatesRef.current.length = 0;
+    
+    // Apply all updates in a single state commit
+    setLastUpdate((prev: PriceData | null) => {
+      let current = prev;
+      for (const update of updates) {
+        current = current
+          ? { ...current, ...(update as PriceData) }
+          : (update as PriceData);
+      }
+      return current;
+    });
+  }, []);
 
   // `connect` has an empty dependency array because every value it needs is
   // accessed through a ref.  This breaks the cycle where a WS message would
@@ -99,6 +123,9 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
         reconnectAttemptsRef.current = 0;
         setReconnectAttempts(0);
 
+        // Start the flush interval when connected
+        flushIntervalRef.current = setInterval(flushPendingUpdates, 350);
+
         if (subscribedAssetsRef.current.size > 0) {
           wsRef.current?.send(
             JSON.stringify({
@@ -119,17 +146,8 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
             message.type === "price_update" ||
             message.type === "delta_update"
           ) {
-            if (message.type === "delta_update" && message.assetId) {
-              // Functional updater — reads current state without it becoming a
-              // dependency of this callback.
-              setLastUpdate((prev: PriceData | null) =>
-                prev
-                  ? { ...prev, ...(message.data as PriceData) }
-                  : (message.data as PriceData),
-              );
-            } else {
-              setLastUpdate(message.data as PriceData);
-            }
+            // Add to pending updates instead of updating state directly
+            pendingUpdatesRef.current.push(message.data);
           }
         } catch (err) {
           console.error("Failed to parse WebSocket message:", err);
@@ -138,6 +156,15 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
 
       wsRef.current.onclose = (event: CloseEvent) => {
         setIsConnected(false);
+
+        // Clean up flush interval on close
+        if (flushIntervalRef.current) {
+          clearInterval(flushIntervalRef.current);
+          flushIntervalRef.current = null;
+        }
+
+        // Flush any remaining pending updates
+        flushPendingUpdates();
 
         // Use ref for reconnect counter — avoids stale closure.
         if (
@@ -167,6 +194,15 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
   const disconnect = useCallback(() => {
     manuallyDisconnectedRef.current = true;
 
+    // Clean up flush interval
+    if (flushIntervalRef.current) {
+      clearInterval(flushIntervalRef.current);
+      flushIntervalRef.current = null;
+    }
+
+    // Flush any remaining pending updates
+    flushPendingUpdates();
+
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -178,7 +214,7 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
     }
 
     setIsConnected(false);
-  }, []);
+  }, [flushPendingUpdates]);
 
   const reconnect = useCallback(() => {
     disconnect();
@@ -225,6 +261,15 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
   // effect above runs in strict-mode double-invocation.
   useEffect(() => {
     return () => {
+      // Clean up flush interval on unmount
+      if (flushIntervalRef.current) {
+        clearInterval(flushIntervalRef.current);
+        flushIntervalRef.current = null;
+      }
+
+      // Flush any remaining pending updates
+      flushPendingUpdates();
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
@@ -233,7 +278,7 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
         wsRef.current = null;
       }
     };
-  }, []);
+  }, [flushPendingUpdates]);
   useEffect(() => {
     const handleVisibilityChange = () => {
       const isVisible = document.visibilityState === "visible";
@@ -276,6 +321,30 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketReturn {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [connect]);
+
+  // Periodic flush of buffered WebSocket messages every 300ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (bufferRef.current.length > 0) {
+        bufferRef.current.forEach((message) => {
+          if (message.type === "price_update" || message.type === "delta_update") {
+            if (message.type === "delta_update" && message.assetId) {
+              setLastUpdate((prev: PriceData | null) =>
+                prev
+                  ? { ...prev, ...(message.data as PriceData) }
+                  : (message.data as PriceData),
+              );
+            } else {
+              setLastUpdate(message.data as PriceData);
+            }
+          }
+        });
+        // Clear buffer after processing
+        bufferRef.current = [];
+      }
+    }, 300);
+    return () => clearInterval(interval);
+  }, []);
   return {
     isConnected,
     lastUpdate,

@@ -1,26 +1,15 @@
 "use client";
 
 import React, { useState } from 'react';
-import { 
-  FileText, 
-  Search, 
-  Download, 
-  Filter, 
-  ChevronLeft, 
-  ChevronRight, 
-  ExternalLink,
-  ShieldAlert,
-  Database,
-  Terminal,
-  Wifi,
-  WifiOff,
-  Cpu
-} from 'lucide-react';
+import { Icon, ICON_IDS } from '@/components/icons';
 import { useXdrWorker } from './useXdrWorker';
+import { buildHighlightedParts } from '@/utils/textUtils';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { LogEntry, FilteredLogResult } from './types';
+import { readIndexedLogs, writeIndexedLogs } from './indexedLogStorage';
+import { LogEntry, FilteredLogResult, FuseMatch } from './types';
 
 // --- Mock Data ---
 const MOCK_LOGS: LogEntry[] = [
@@ -30,10 +19,13 @@ const MOCK_LOGS: LogEntry[] = [
   { id: '104', timestamp: '2026-04-28 12:20:10', type: 'transaction', severity: 'info', message: 'XDR: BBBBBEEEEEEFFFFF...', actor: 'Binance Pan-Africa', txHash: '0xdef...456' },
 ];
 
+const getStartupLogs = () => readIndexedLogs() ?? MOCK_LOGS;
+
 export default function LogsPage() {
+  const [logs] = useState<LogEntry[]>(getStartupLogs);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredResults, setFilteredResults] = useState<FilteredLogResult[]>(MOCK_LOGS.map(l => ({ item: l })));
+  const [filteredResults, setFilteredResults] = useState<FilteredLogResult[]>(() => logs.map(l => ({ item: l })));
   const [isSearching, setIsSearching] = React.useState(false);
   const workerRef = React.useRef<Worker | null>(null);
 
@@ -51,14 +43,18 @@ export default function LogsPage() {
       }
     };
 
-    workerRef.current.postMessage({ type: 'INIT', payload: { logs: MOCK_LOGS } });
+    workerRef.current.postMessage({ type: 'INIT', payload: { logs } });
 
     return () => { workerRef.current?.terminate(); };
-  }, []);
+  }, [logs]);
+
+  React.useEffect(() => {
+    writeIndexedLogs(logs);
+  }, [logs]);
 
   // ── Batch-decode all XDR log lines off the main thread ─────────────────
   React.useEffect(() => {
-    const xdrItems = MOCK_LOGS
+    const xdrItems = logs
       .filter(log => log.message.startsWith('XDR: '))
       .map(log => ({ id: log.id, xdr: log.message.replace('XDR: ', '') }));
 
@@ -76,9 +72,7 @@ export default function LogsPage() {
         })
       );
     });
-  // batchDecode is stable (useCallback with no deps) — safe to list here
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [batchDecode]);
+  }, [batchDecode, logs]);
 
   // Handle search with debounce logic
   React.useEffect(() => {
@@ -87,13 +81,13 @@ export default function LogsPage() {
         setIsSearching(true);
         workerRef.current.postMessage({ 
           type: 'SEARCH', 
-          payload: { query: searchQuery, logs: MOCK_LOGS } 
+          payload: { query: searchQuery, logs } 
         });
       }
     }, 250); // Debounce search to 250ms to reduce per-keystroke processing
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [logs, searchQuery]);
 
   const displayedResults = filteredResults.filter(res => 
     filter === 'all' || res.item.severity === filter
@@ -133,7 +127,7 @@ export default function LogsPage() {
           {/* XDR Worker activity badge — visible while worker thread is busy */}
           {xdrDecoding && (
             <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 rounded-full animate-pulse">
-              <Cpu size={13} className="text-purple-400" />
+              <Icon id={ICON_IDS.cpu} size={13} className="text-purple-400" />
               <span className="text-xs font-mono text-purple-300 uppercase tracking-wider">Decoding XDR&hellip;</span>
             </div>
           )}
@@ -164,11 +158,11 @@ export default function LogsPage() {
             }}
             className="flex items-center gap-2 bg-[#161b22] border border-gray-700 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm group"
           >
-            <Download size={16} className="group-hover:translate-y-0.5 transition-transform" />
+            <Icon id={ICON_IDS.download} size={16} className="group-hover:translate-y-0.5 transition-transform" />
             Export CSV
           </button>
           <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
-            <Terminal size={16} />
+            <Icon id={ICON_IDS.terminal} size={16} />
             Live Console
           </button>
         </div>
@@ -177,7 +171,7 @@ export default function LogsPage() {
       {/* --- Filter & Search Bar --- */}
       <div className="bg-[#161b22] border border-gray-800 rounded-xl p-4 mb-6 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
-          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${isSearching ? 'text-blue-500 animate-pulse' : 'text-gray-500'}`} size={18} />
+          <Icon id={ICON_IDS.search} size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${isSearching ? 'text-blue-500 animate-pulse' : 'text-gray-500'}`} />
           <input 
             type="text" 
             placeholder="Filter logs by message, actor, or hash..." 
@@ -187,7 +181,7 @@ export default function LogsPage() {
           />
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <Filter size={18} className="text-gray-500" />
+          <Icon id={ICON_IDS.filter} size={18} className="text-gray-500" />
           <select 
             className="bg-[#0d1117] border border-gray-700 rounded-md py-2 px-4 text-sm focus:outline-none"
             onChange={(e) => setFilter(e.target.value)}
@@ -210,7 +204,7 @@ export default function LogsPage() {
               exit={{ opacity: 0, y: -10 }}
               className="absolute top-0 inset-x-0 z-20 bg-yellow-500/90 text-black py-1.5 px-4 flex items-center justify-center gap-2 text-xs font-bold"
             >
-              <WifiOff size={14} />
+              <Icon id={ICON_IDS.wifiOff} size={14} />
               Operating in Offline Mode — Cached data is being shown
             </motion.div>
           )}
@@ -227,49 +221,83 @@ export default function LogsPage() {
         </div>
 
         {/* Scroll container — useVirtualizer's getScrollElement targets this ref */}
-        <div 
-          ref={parentRef}
-          className="overflow-auto max-h-[600px] scrollbar-thin scrollbar-thumb-gray-700"
-        >
+        {displayedResults.length === 0 ? (
+          <div className="px-6 py-20 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+            <Icon id={ICON_IDS.search} size={32} className="opacity-20" />
+            <p>No logs matching &ldquo;{searchQuery}&rdquo;</p>
+          </div>
+        ) : (
           <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
+            ref={parentRef}
+            className="overflow-auto max-h-[600px] scrollbar-thin scrollbar-thumb-gray-700"
           >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const result = displayedResults[virtualRow.index];
-              const log = result.item;
-              const matches = result.matches || [];
-              
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-index={virtualRow.index}
-                  ref={rowVirtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className="grid grid-cols-[140px_120px_100px_1fr_150px_120px] border-b border-gray-800/50 hover:bg-[#1c2128] transition-colors group font-mono text-[13px] items-center"
-                >
-                  <div className="px-6 py-4 text-gray-400 whitespace-nowrap">
-                    {log.timestamp}
-                  </div>
-                  <div className="px-6 py-4">
-                    <span className="flex items-center gap-2 text-gray-200">
-                      {log.type === 'transaction' && <Database size={14} className="text-blue-400" />}
-                      {log.type === 'security' && <ShieldAlert size={14} className="text-red-400" />}
-                      {log.type === 'system' && <FileText size={14} className="text-gray-400" />}
-                      <span className="capitalize">{log.type}</span>
-                    </span>
-                  </div>
-                  <div className="px-6 py-4">
-                    <SeverityIndicator severity={log.severity} />
+            {/* Total height spacer — keeps the scrollbar proportional to the full dataset */}
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {/* Only the rows intersecting the viewport are mounted in the DOM */}
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const result = displayedResults[virtualRow.index];
+                const log = result.item;
+                const matches = result.matches || [];
+
+                return (
+                  <div
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="grid grid-cols-[140px_120px_100px_1fr_150px_120px] border-b border-gray-800/50 hover:bg-[#1c2128] transition-colors group font-mono text-[13px] items-center"
+                  >
+                    <div className="px-6 py-4 text-gray-400 whitespace-nowrap">
+                      {log.timestamp}
+                    </div>
+                    <div className="px-6 py-4">
+                      <span className="flex items-center gap-2 text-gray-200">
+                        {log.type === 'transaction' && <Icon id={ICON_IDS.database} size={14} className="text-blue-400" />}
+                        {log.type === 'security' && <Icon id={ICON_IDS.shieldAlert} size={14} className="text-red-400" />}
+                        {log.type === 'system' && <Icon id={ICON_IDS.fileText} size={14} className="text-gray-400" />}
+                        <span className="capitalize">{log.type}</span>
+                      </span>
+                    </div>
+                    <div className="px-6 py-4">
+                      <SeverityIndicator severity={log.severity} />
+                    </div>
+                    <div className="px-6 py-4 truncate text-gray-200">
+                      {log.decodedData ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-purple-400 uppercase font-bold tracking-wider">Decoded XDR</span>
+                          <span className="text-xs text-green-400 font-mono">{JSON.stringify(log.decodedData)}</span>
+                        </div>
+                      ) : (
+                        <SearchHighlight text={log.message} matches={matches.find((m: FuseMatch) => m.key === 'message')?.indices} />
+                      )}
+                    </div>
+                    <div className="px-6 py-4 text-gray-400 truncate">
+                      <SearchHighlight text={log.actor} matches={matches.find((m: FuseMatch) => m.key === 'actor')?.indices} />
+                    </div>
+                    <div className="px-6 py-4 text-right">
+                      {log.txHash ? (
+                        <button className="text-blue-500 hover:text-blue-400 flex items-center gap-1 justify-end ml-auto group/hash">
+                          <span className="text-xs uppercase group-hover/hash:underline">
+                            <SearchHighlight text={log.txHash} matches={matches.find((m: FuseMatch) => m.key === 'txHash')?.indices} />
+                          </span>
+                          <Icon id={ICON_IDS.externalLink} size={12} />
+                        </button>
+                      ) : (
+                        <span className="text-gray-600">—</span>
+                      )}
+                    </div>
                   </div>
                      <div className="px-6 py-4 truncate text-gray-200">
                        {log.decodedData ? (
@@ -278,17 +306,17 @@ export default function LogsPage() {
                            <span className="text-xs text-green-400 font-mono">{JSON.stringify(log.decodedData)}</span>
                          </div>
                        ) : (
-                         <SearchHighlight text={log.message} matches={matches.find((m: { key: string; indices: [number, number][] }) => m.key === 'message')?.indices} />
+                         <SearchHighlight text={log.message} matches={matches.find((m) => m.key === 'message')?.indices} />
                        )}
                      </div>
                      <div className="px-6 py-4 text-gray-400 truncate">
-                       <SearchHighlight text={log.actor} matches={matches.find((m: { key: string; indices: [number, number][] }) => m.key === 'actor')?.indices} />
+                       <SearchHighlight text={log.actor} matches={matches.find((m) => m.key === 'actor')?.indices} />
                      </div>
                      <div className="px-6 py-4 text-right">
                        {log.txHash ? (
                          <button className="text-blue-500 hover:text-blue-400 flex items-center gap-1 justify-end ml-auto group/hash">
                            <span className="text-xs uppercase group-hover/hash:underline">
-                             <SearchHighlight text={log.txHash} matches={matches.find((m: { key: string; indices: [number, number][] }) => m.key === 'txHash')?.indices} />
+                             <SearchHighlight text={log.txHash} matches={matches.find((m) => m.key === 'txHash')?.indices} />
                            </span>
                            <ExternalLink size={12} />
                          </button>
@@ -309,18 +337,21 @@ export default function LogsPage() {
                 <p>No logs matching "{searchQuery}"</p>
               </div>
             )}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* --- Pagination Footer --- */}
         <div className="p-4 border-t border-gray-800 flex justify-between items-center text-sm text-gray-500">
-          <span>Showing {displayedResults.length} of {MOCK_LOGS.length} entries</span>
+          <span>Showing {displayedResults.length} of {logs.length} entries</span>
           <div className="flex gap-2">
             <button className="p-2 border border-gray-700 rounded-md hover:bg-gray-800 disabled:opacity-50" disabled>
-              <ChevronLeft size={16} />
+              <Icon id={ICON_IDS.chevronLeft} size={16} />
             </button>
             <button className="p-2 border border-gray-700 rounded-md hover:bg-gray-800">
-              <ChevronRight size={16} />
+              <Icon id={ICON_IDS.chevronRight} size={16} />
             </button>
           </div>
         </div>
@@ -331,32 +362,24 @@ export default function LogsPage() {
 
 // --- Sub-components ---
 
-function SearchHighlight({ text, matches }: { text: string; matches?: [number, number][] }) {
+function SearchHighlight({ text, matches }: { text: string; matches?: readonly (readonly [number, number])[] }) {
   if (!matches || matches.length === 0) return <span>{text}</span>;
 
-  const result = [];
-  let lastIndex = 0;
+  const parts = React.useMemo(() => buildHighlightedParts(text, matches), [deps.text, deps.matchesJson]);
 
-  matches.forEach(([start, end], idx) => {
-    // Add text before match
-    if (start > lastIndex) {
-      result.push(text.slice(lastIndex, start));
-    }
-    // Add highlighted match
-    result.push(
-      <mark key={idx} className="bg-[#CBF34D]/30 text-[#CBF34D] rounded-sm px-0.5 border-b border-[#CBF34D]/50 no-underline">
-        {text.slice(start, end + 1)}
-      </mark>
-    );
-    lastIndex = end + 1;
-  });
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    result.push(text.slice(lastIndex));
-  }
-
-  return <span>{result}</span>;
+  return (
+    <span>
+      {parts.map((p, i) =>
+        p.type === 'text' ? (
+          p.text
+        ) : (
+          <mark key={i} className="bg-[#CBF34D]/30 text-[#CBF34D] rounded-sm px-0.5 border-b border-[#CBF34D]/50 no-underline">
+            {p.text}
+          </mark>
+        ),
+      )}
+    </span>
+  );
 }
 
 function SeverityIndicator({ severity }: { severity: 'info' | 'warning' | 'critical' }) {
