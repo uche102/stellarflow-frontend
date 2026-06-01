@@ -13,7 +13,7 @@ import {
   ChevronRight, 
   Wallet 
 } from 'lucide-react';
-import { useTransformedCustomAddressField } from '@/app/hooks/useTransformedData';
+import { withShortenedAddressField } from '@/utils/addressUtils';
 import { useRAFInterval } from '@/app/hooks/useRAFInterval';
 
 // --- Types ---
@@ -41,8 +41,8 @@ export default function GovernancePage() {
 
   // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
   const transformedProposals = useMemo(
-    () => useTransformedCustomAddressField(MOCK_PROPOSALS, 'proposer'),
-    []
+    () => withShortenedAddressField(MOCK_PROPOSALS, 'proposer'),
+    [MOCK_PROPOSALS],
   );
 
   // Live ledger countdown — one shared RAF tick every ~5 s (Stellar avg ledger time)

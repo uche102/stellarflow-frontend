@@ -15,7 +15,7 @@ import {
   EyeOff, 
   Copy 
 } from 'lucide-react';
-import { useTransformedCustomAddressField } from '@/app/hooks/useTransformedData';
+import { withShortenedAddressField } from '@/utils/addressUtils';
 
 // --- Types ---
 interface Consumer {
@@ -42,8 +42,8 @@ export default function ConsumersPage() {
 
   // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
   const transformedConsumers = useMemo(
-    () => useTransformedCustomAddressField(MOCK_CONSUMERS, 'contractAddress'),
-    []
+    () => withShortenedAddressField(MOCK_CONSUMERS, 'contractAddress'),
+    [MOCK_CONSUMERS],
   );
 
   const handleCopy = () => {
