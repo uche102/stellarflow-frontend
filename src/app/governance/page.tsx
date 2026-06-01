@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { withShortenedAddressField } from '@/utils/addressUtils';
 import { useRAFInterval } from '@/app/hooks/useRAFInterval';
+import { useWalletState } from '@/app/hooks/useWalletState';
 
 // --- Types ---
 interface Proposal {
@@ -38,6 +39,13 @@ const MOCK_PROPOSALS: Proposal[] = [
 
 export default function GovernancePage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'archived'>('all');
+  const { wallet, isChecking, refreshWalletState } = useWalletState();
+
+  const walletStatus = wallet?.connected
+    ? wallet.publicKey
+      ? `${wallet.publicKey.slice(0, 4)}...${wallet.publicKey.slice(-4)}`
+      : 'Connected'
+    : 'No wallet connected';
 
   // Pre-compute shortened addresses on data ingestion to avoid render-time string slicing
   const transformedProposals = useMemo(
@@ -69,6 +77,14 @@ export default function GovernancePage() {
           <p className="text-sm text-gray-500 mb-1">Admin / Consensus</p>
           <h1 className="text-3xl font-bold tracking-tight">Governance & Proposals</h1>
         </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => refreshWalletState()}
+            disabled={isChecking}
+            className="flex items-center gap-2 bg-[#161b22] border border-gray-800 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm font-medium"
+          >
+            <Wallet size={16} className="text-purple-400" />
+            {wallet?.connected ? walletStatus : 'Connect Freighter Wallet'}
         <div className="flex gap-3">
           <button className="flex items-center gap-2 bg-[#161b22] border border-gray-800 hover:bg-gray-800 text-gray-300 px-4 py-2 rounded-lg transition-all text-sm font-medium">
             <Icon id={ICON_IDS.wallet} size={16} className="text-purple-400" />
@@ -81,6 +97,9 @@ export default function GovernancePage() {
         </div>
       </div>
 
+      <div className="mb-3 text-sm text-gray-400">
+        Active wallet status: <span className="text-white">{walletStatus}</span>
+      </div>
       {/* --- Consensus Statistics Rows --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <StatCard title="Total Staking Power" value="2.85M SF" icon={<Icon id={ICON_IDS.vote} size={20} className="text-blue-400" />} subtitle="Active voting weights" />

@@ -6,19 +6,32 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Icon, ICON_IDS } from "@/components/icons";
 import { useProgressBar } from "./TopLoadingBar";
+import { useWalletState } from "../hooks/useWalletState";
 
 const Nav = memo(() => {
   const hasAnomaly = true;
   const router = useRouter();
   const pathname = usePathname();
   const { start, done } = useProgressBar();
+  const { wallet, isChecking, refreshWalletState } = useWalletState();
+
+  const walletLabel = wallet?.connected
+    ? wallet.publicKey
+      ? `${wallet.publicKey.slice(0, 4)}...${wallet.publicKey.slice(-4)}`
+      : "Wallet connected"
+    : "Connect Wallet";
 
   const handleConnectWallet = useCallback(async () => {
     start();
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const state = await refreshWalletState();
     done();
-    alert("Connect Wallet clicked! (Add your Web3 logic here)");
-  }, [start, done]);
+
+    if (state?.connected) {
+      alert(`Connected wallet: ${state.publicKey ?? "unknown"}`);
+    } else {
+      alert("No active Stellar wallet detected. Please connect your extension.");
+    }
+  }, [refreshWalletState, start, done]);
 
   return (
     <main className="sticky top-0 z-50 bg-zinc-950 border-b border-zinc-800">
@@ -48,8 +61,11 @@ const Nav = memo(() => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleConnectWallet}
+            disabled={isChecking}
             className="wallet-btn group flex min-w-0 items-center gap-2 px-3 sm:gap-2.5 sm:px-4 py-2 rounded-2xl font-semibold text-sm sm:text-base transition-all duration-300 hover:shadow-xl active:scale-95 whitespace-nowrap"
           >
+            <Wallet className="w-5 h-5 transition-transform group-hover:rotate-12" />
+            <span className="truncate">{walletLabel}</span>
             <Icon id={ICON_IDS.wallet} size={18} className="transition-transform group-hover:rotate-12" />
             <span className="truncate">
               Connect <span className="hidden md:inline">Wallet</span>
