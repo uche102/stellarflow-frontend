@@ -8,7 +8,6 @@ import { UserProvider } from "./components/providers/UserProvider";
 import { WalletProvider } from "./components/providers/WalletProvider";
 import { QueryProvider } from "./components/providers/QueryProvider";
 import Script from "next/script";
-import { SocketProvider } from "./components/providers/SocketProvider";
 import { SvgSprite } from "@/components/icons";
 
 const geistSans = Geist({
@@ -90,16 +89,17 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <UserProvider>
-            <WalletProvider>
-              <ProgressBarProvider>
-                {children}
-              </ProgressBarProvider>
-            </WalletProvider>
-            <QueryProvider>
-              <ProgressBarProvider>
-                {children}
-              </ProgressBarProvider>
-            </QueryProvider>
+            {/* SocketProvider wraps the full app so any route can consume
+                live WebSocket data without re-mounting on navigation. */}
+            <SocketProvider>
+              <WalletProvider>
+                <QueryProvider>
+                  <ProgressBarProvider>
+                    {children}
+                  </ProgressBarProvider>
+                </QueryProvider>
+              </WalletProvider>
+            </SocketProvider>
           </UserProvider>
         </ThemeProvider>
       </body>
