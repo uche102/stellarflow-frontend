@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Chart,
   LineController,
@@ -13,6 +13,12 @@ import {
   type ChartConfiguration,
 } from "chart.js";
 import { useRafThrottle } from "../hooks/useRafThrottle";
+import { useChartWorker } from "../charts/useChartWorker";
+import {
+  windowSeries,
+  CHART_HISTORY_LIMIT,
+  type SeriesWindow,
+} from "../charts/chartCalculations";
 
 Chart.register(
   LineController,
@@ -23,8 +29,6 @@ Chart.register(
   Filler,
   Tooltip,
 );
-
-const CHART_HISTORY_LIMIT = 150;
 
 interface DashboardTrafficChartProps {
   labels?: string[];
@@ -44,6 +48,13 @@ export default function DashboardTrafficChart({
 }: DashboardTrafficChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<Chart<"line"> | null>(null);
+  const { computeSeries } = useChartWorker();
+
+  // Seed synchronously from the shared module so the first paint is correct;
+  // the worker then re-windows off the main thread when inputs change.
+  const [series, setSeries] = useState<SeriesWindow>(() =>
+    windowSeries(labels, values, CHART_HISTORY_LIMIT),
+  );
 
   const processPointerMove = useRafThrottle((position: PointerPosition) => {
     const chart = chartRef.current;
@@ -72,16 +83,26 @@ export default function DashboardTrafficChart({
     chart.update("none");
   });
 
+  // Offload the data sorting / windowing / aggregation to the chart worker so
+  // it stays out of the critical interaction lane during active chart changes.
+  useEffect(() => {
+    let cancelled = false;
+    computeSeries("dashboard-traffic", labels, values, CHART_HISTORY_LIMIT)
+      .then(({ window }) => {
+        if (!cancelled) setSeries(window);
+      })
+      .catch(() => {
+        // Worker failed unexpectedly — keep the last good (synchronous) window.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [labels, values, computeSeries]);
+
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Cap to the last CHART_HISTORY_LIMIT vectors and null-prune trailing slots
-    // to release memory registers back to the browser GC.
-    const windowedLabels = labels.slice(-CHART_HISTORY_LIMIT);
-    const windowedValues = values.slice(-CHART_HISTORY_LIMIT);
-    // Explicit null-prune: overwrite any trailing undefined/null positions
-    windowedLabels.length = windowedLabels.length;
-    windowedValues.length = windowedValues.length;
+    const { labels: windowedLabels, values: windowedValues } = series;
 
     const config: ChartConfiguration<"line"> = {
       type: "line",
@@ -165,7 +186,7 @@ export default function DashboardTrafficChart({
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [labels, values, processPointerMove]);
+  }, [series, processPointerMove]);
 
   return (
     <div className="h-[280px] w-full">
