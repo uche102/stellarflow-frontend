@@ -39,7 +39,7 @@ export default function SettingsPage() {
 
   const debouncedSettings = useDebounce(settings, 500);
   const isSaving = Date.now() - lastSaveTime < 500;
-  const hasChanges = JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const hasChanges = JSON.stringify(debouncedSettings) !== JSON.stringify(savedSettings);
 
   const throttledSetSessionTimeout = useRafThrottle((v: string) => setSettings(prev => ({ ...prev, sessionTimeout: v })));
 
@@ -47,15 +47,15 @@ export default function SettingsPage() {
     if (hasChanges && !isPending) {
       const timer = setTimeout(async () => {
         setIsPending(true);
-        console.log('Saving settings:', settings);
+        console.log('Saving settings:', debouncedSettings);
         await new Promise(r => setTimeout(r, 300));
-        setSavedSettings({ ...settings });
+        setSavedSettings({ ...debouncedSettings });
         setLastSaveTime(Date.now());
         setIsPending(false);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [debouncedSettings, hasChanges, isPending, settings]);
+  }, [debouncedSettings, hasChanges, isPending]);
 
   const handleToggle = (key: keyof Settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
