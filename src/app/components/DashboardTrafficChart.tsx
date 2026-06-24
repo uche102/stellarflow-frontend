@@ -75,10 +75,12 @@ export default function DashboardTrafficChart({
       false,
     );
 
-    chart.tooltip.setActiveElements(activeElements, {
-      x: position.clientX,
-      y: position.clientY,
-    });
+    if (chart.tooltip) {
+      chart.tooltip.setActiveElements(activeElements, {
+        x: position.clientX,
+        y: position.clientY,
+      });
+    }
 
     chart.update("none");
   });
@@ -168,7 +170,9 @@ export default function DashboardTrafficChart({
     const hideTooltip = () => {
       const chart = chartRef.current;
       if (!chart) return;
-      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      if (chart.tooltip) {
+        chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      }
       chart.update("none");
     };
 
